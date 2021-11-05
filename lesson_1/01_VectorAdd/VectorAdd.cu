@@ -74,9 +74,9 @@ int main(){
     TM_device.start();
 
     vectorAddKernel<<<DimGrid,DimBlock>>>(d_inputA,d_inputB,N,d_output);
-
+	
+	CHECK_CUDA_ERROR
     TM_device.stop();
-    CHECK_CUDA_ERROR
     TM_device.print("vectorAdd device: ");
 
     std::cout << std::setprecision(1)
