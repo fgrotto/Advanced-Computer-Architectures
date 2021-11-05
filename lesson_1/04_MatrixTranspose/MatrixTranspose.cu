@@ -10,10 +10,15 @@ __global__
 void matrixTransposeKernel(const int* d_matrix_in,
                            int        N,
                            int*       d_matrix_out) {
-    /// YOUR CODE
+    int row = blockIdx.y+blockDim.y + threadIdx.y;
+    int col = blockIdx.x+blockDim.x + threadIdx.x;
+
+    d_matrix_out[Row * N + Col] = d_matrix_in[Col * N + Row];
 }
 
-const int N  = 1000;
+const int N  = 1024;
+const int BLOCK_SIZE_X = 16;
+const int BLOCK_SIZE_Y = 16;
 
 int main() {
     Timer<DEVICE> TM_device;
@@ -48,18 +53,21 @@ int main() {
     // -------------------------------------------------------------------------
     // DEVICE MEMORY ALLOCATION
     int *d_matrix_in, *d_matrix_out;
-    /// SAFE_CALL( cudaMalloc( ... ) )
-    /// SAFE_CALL( cudaMalloc( ... ) )
+    SAFE_CALL( cudaMalloc( &d_matrix_in, N*N*sizeof(int) ) )
+    SAFE_CALL( cudaMalloc( &d_matrix_out, N*N*sizeof(int)) )
 
     // -------------------------------------------------------------------------
     // COPY DATA FROM HOST TO DEVIE
-    /// SAFE_CALL( cudaMemcpy( ... ) )
-
+    SAFE_CALL( cudaMemcpy( d_matrix_in, h_matrix_in, N * N * sizeof(int), cudaMemcpyHostToDevice));
     // -------------------------------------------------------------------------
     // DEVICE EXECUTION
     TM_device.start();
 
-    /// matrixTransposeKernel<<< , >>>();
+    dim3 DimGrid(N/BLOCK_SIZE_X, N/BLOCK_SIZE_Y, 1);
+    if (N%BLOCK_SIZE_X) DimGrid.x++;
+    if (N%BLOCK_SIZE_Y) DimGrid.y++;
+    dim3 DimBlock(BLOCK_SIZE_X, BLOCK_SIZE_Y, 1);
+    matrixTransposeKernel<<<DimGrid,DimBlock>>>(d_matrix_in, N, d_matrix_out);
 
     TM_device.stop();
     CHECK_CUDA_ERROR
@@ -71,7 +79,7 @@ int main() {
 
     // -------------------------------------------------------------------------
     // COPY DATA FROM DEVICE TO HOST
-    /// SAFE_CALL( cudaMemcpy( ... ) )
+    SAFE_CALL( cudaMemcpy( h_matrix_tmp, d_matrix_out, N*N*sizeof(int), cudaMemcpyDeviceToHost) )
 
     // -------------------------------------------------------------------------
     // RESULT CHECK
@@ -95,8 +103,8 @@ int main() {
 
     // -------------------------------------------------------------------------
     // DEVICE MEMORY DEALLOCATION
-    /// SAFE_CALL( cudaFree( ... ) )
-    /// SAFE_CALL( cudaFree( ... ) )
+    SAFE_CALL( cudaFree( d_matrix_in ) )
+    SAFE_CALL( cudaFree( d_matrix_out ) )
 
     // -------------------------------------------------------------------------
     cudaDeviceReset();
