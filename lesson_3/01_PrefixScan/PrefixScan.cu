@@ -9,7 +9,20 @@ using namespace timer_cuda;
 const int BLOCK_SIZE = 512;
 
 __global__ void PrefixScan(int* VectorIN, int N) {
-	
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	int offset = 1;
+
+	for(int level = 1; level < N; level *= 2) {	
+		if (i >= offset && i < N)
+			VectorIN[i] = VectorIN[i - offset] + VectorIN[i];
+		__syncthreads();
+		offset *= 2;
+	}
+	__syncthreads();
+
+	if (blockIdx.x > 0)
+		VectorIN[i] += VectorIN[(blockIdx.x-1) * blockDim.x];
+	__syncthreads();
 }
 
 void printArray(int* Array, int N, const char str[] = "") {
@@ -76,7 +89,9 @@ int main() {
 
     host_TM.stop();
 
-	if (!std::equal(host_result, host_result + blockDim - 1, prefixScan + 1)) {
+	// printArray(prefixScan, N);
+	// printArray(host_result, N);
+	if (!std::equal(host_result, host_result + blockDim - 1 , prefixScan)) {
 		std::cerr << " Error! :  prefixScan" << std::endl << std::endl;
 		cudaDeviceReset();
 		std::exit(EXIT_FAILURE);
