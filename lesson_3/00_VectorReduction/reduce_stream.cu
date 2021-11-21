@@ -10,6 +10,7 @@ using namespace timer;
 #define DIV(a, b)   (((a) + (b) - 1) / (b))
 
 const int N  = 16777216;
+const int SegSize = 8388608;
 #define BLOCK_SIZE 256
 
 __global__ void ReduceKernel(int* VectorIN, int N) {
@@ -75,13 +76,16 @@ int main() {
 
 	// ------------------- CUDA INIT -------------------------------------------
     
-	int* devVectorIN;
-	SAFE_CALL( cudaMalloc(&devVectorIN, N * sizeof(int)) );
+    cudaStream_t stream0, stream1;
+    cudaStreamCreate(&stream0);
+    cudaStreamCreate(&stream1);
+	int* devVectorIN0;
+    int* devVectorIN1;
+	SAFE_CALL( cudaMalloc(&devVectorIN0, SegSize * sizeof(int)) );
+    SAFE_CALL( cudaMalloc(&devVectorIN1, SegSize * sizeof(int)) );
 	
-	int sum;
+	int sum1, sum2, sum;
 	float dev_time;
-    SAFE_CALL( cudaMemcpy(devVectorIN, VectorIN, N * sizeof(int),
-       cudaMemcpyHostToDevice) );
 
 	// ------------------- CUDA COMPUTATION 1 ----------------------------------
 
@@ -89,21 +93,33 @@ int main() {
 
     dev_TM.start();
     
-    ReduceKernelSharedLessDivergence<<<DIV(N, BLOCK_SIZE), BLOCK_SIZE>>>
-            (devVectorIN, N);
-    ReduceKernelSharedLessDivergence<<<DIV(N, BLOCK_SIZE* BLOCK_SIZE), BLOCK_SIZE>>>
-                (devVectorIN, DIV(N, BLOCK_SIZE));
-    ReduceKernelSharedLessDivergence<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE>>>
-                (devVectorIN, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
+    SAFE_CALL( cudaMemcpyAsync(devVectorIN0, VectorIN, SegSize * sizeof(int),
+             cudaMemcpyHostToDevice, stream0) );
+    ReduceKernelSharedLessDivergence<<<DIV(SegSize, BLOCK_SIZE), BLOCK_SIZE, 1024 , stream0>>>
+                        (devVectorIN0, SegSize);
+    ReduceKernelSharedLessDivergence<<<DIV(SegSize, BLOCK_SIZE* BLOCK_SIZE), BLOCK_SIZE, 1024 , stream0>>>
+                         (devVectorIN0, DIV(SegSize, BLOCK_SIZE));
+    ReduceKernelSharedLessDivergence<<<DIV(SegSize, BLOCK_SIZE * BLOCK_SIZE * 128), 128, 1024 , stream0>>>
+                         (devVectorIN0, DIV(SegSize, BLOCK_SIZE * 128));
 
-    dev_TM.stop();
-    
-    SAFE_CALL( cudaMemcpy(&sum, devVectorIN, sizeof(int),
-        cudaMemcpyDeviceToHost) );
-    
-    dev_time = dev_TM.duration();
+    SAFE_CALL( cudaMemcpyAsync(devVectorIN1, VectorIN+SegSize, SegSize * sizeof(int),
+             cudaMemcpyHostToDevice, stream1) );
+    ReduceKernelSharedLessDivergence<<<DIV(SegSize, BLOCK_SIZE), BLOCK_SIZE, 1024 , stream1>>>
+                        (devVectorIN1, N);
+    ReduceKernelSharedLessDivergence<<<DIV(SegSize, BLOCK_SIZE* BLOCK_SIZE), BLOCK_SIZE, 1024 , stream1>>>
+                         (devVectorIN1, DIV(SegSize, BLOCK_SIZE));
+    ReduceKernelSharedLessDivergence<<<DIV(SegSize, BLOCK_SIZE * BLOCK_SIZE * 128), 128, 1024 , stream1>>>
+                         (devVectorIN1, DIV(SegSize, BLOCK_SIZE * 128));
+
+	dev_TM.stop();
+	dev_time = dev_TM.duration();
 	CHECK_CUDA_ERROR;
-		
+
+	SAFE_CALL( cudaMemcpy(&sum1, devVectorIN0, sizeof(int),
+                            cudaMemcpyDeviceToHost) );
+    SAFE_CALL( cudaMemcpy(&sum2, devVectorIN1, sizeof(int),
+                            cudaMemcpyDeviceToHost) );
+    sum = sum1+sum2;
 	// ------------------- HOST ------------------------------------------------
     host_TM.start();
 
@@ -138,6 +154,7 @@ int main() {
     std::cout << host_TM.duration() << ";" << dev_TM.duration() << ";" << host_TM.duration() / dev_TM.duration() << std::endl;
 
     delete[] VectorIN;
-    SAFE_CALL( cudaFree(devVectorIN) );
+    SAFE_CALL( cudaFree(devVectorIN0) );
+    SAFE_CALL( cudaFree(devVectorIN1) );
     cudaDeviceReset();
 }

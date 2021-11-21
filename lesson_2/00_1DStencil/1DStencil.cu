@@ -7,23 +7,27 @@
 using namespace timer;
 
 const int RADIUS = 7;
+const int DIM_BLOCK = 256;
 
 __global__
 void stencilKernel(const int* d_input, int N, int* d_output) {
+    __shared__ int d_sm[DIM_BLOCK + 2 * RADIUS];
     int global_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    __shared__ int ds[RADIUS*2-1];	
-    int value = 0;
-	if (global_id < N-RADIUS && global_id >= RADIUS) {	
-        ds[threadIdx.x] = d_input[global_id-RADIUS] 
-        __synchthreads();
+    d_sm[threadIdx.x] = d_input[global_id];
 
-		for (int j = global_id - RADIUS; j <= global_id + RADIUS; j++)
-			value += ds[j];
-            
-        __synchthreads();
-		d_output[global_id] = value;
-	}
+    if (threadIdx.x < RADIUS) {
+        d_sm[threadIdx.x + DIM_BLOCK] = d_input[blockDim.x + global_id];
+        d_sm[threadIdx.x + RADIUS + DIM_BLOCK] = d_input[global_id + RADIUS + blockDim.x];
+    }
+    __syncthreads();
+
+    if (global_id < N - 2 * RADIUS) {
+        int v = 0;
+        for (int i = 0; i < RADIUS * 2 + 1; ++i)
+            v += d_sm[threadIdx.x + i];
+        d_output[global_id + RADIUS] = v;
+    }
 }
 
 const int N  = 10000000;
@@ -72,7 +76,7 @@ int main() {
     // did you miss something?
     dim3 DimGrid(N/256, 1, 1);
     if (N%256) DimGrid.x++;
-    dim3 DimBlock(256, 1, 1);
+    dim3 DimBlock(DIM_BLOCK, 1, 1);
 
     // -------------------------------------------------------------------------
     // DEVICE EXECUTION
