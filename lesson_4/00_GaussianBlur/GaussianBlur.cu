@@ -8,7 +8,7 @@
 using namespace timer;
 
 const int N = 10; // it has to be divisible by 2
-const int WIDTH  =1000;
+const int WIDTH  = 1000;
 const int HEIGHT = 500;
 const int CHANNELS = 3;
 const int BLOCK_SIZE = 32;
@@ -50,7 +50,8 @@ void buildGaussianFilterMask(float *Mask, int N, float sigma)
  
     for (int i = 0; i < N; ++i)
         for (int j = 0; j < N; ++j)
-            Mask[i *N + j] /= sum;
+            // Mask[i *N + j] /= sum;
+			Mask[i *N + j] = 1.0/100.0; // Fixed smoothing filter
 }
 
 __global__ void GaussianBlurDevice(const unsigned char *image,
@@ -80,6 +81,87 @@ __global__ void GaussianBlurDevice(const unsigned char *image,
 		}
 	}
 }
+
+// __global__ void GaussianBlurDeviceSharedMemory(const unsigned char *image,
+// 								   const float *mask,
+// 								   unsigned char *image_out,
+// 								   int N)
+// {
+//     __shared__ float sharedMem[5000];
+
+// 	int globalId_x = threadIdx.x + blockIdx.x * blockDim.x;
+// 	int globalId_y = threadIdx.y + blockIdx.y * blockDim.y;
+
+// 	if (globalId_x < WIDTH && globalId_y < HEIGHT)
+// 	{
+// 		for (int channel = 0; channel < CHANNELS; ++channel)
+// 		{
+// 			sharedMem[(threadIdx.y * blockDim.x + threadIdx.x) * CHANNELS + channel] = image[(globalId_y*WIDTH+globalId_x) * CHANNELS + channel];
+// 			__syncthreads();
+
+// 			float pixel_value = 0;
+// 			for (int u = 0; u < N; u++)
+// 			{
+// 				for (int v = 0; v < N; v++)
+// 				{
+// 					int new_x = min(WIDTH, max(0, threadIdx.x + u));
+// 					int new_y = min(HEIGHT, max(0, threadIdx.y + v));
+// 					pixel_value += mask[v * N + u] * sharedMem[(new_y * blockDim.x + new_x) * CHANNELS + channel];
+// 				}
+// 			}
+// 			image_out[(globalId_y * WIDTH + globalId_x) * CHANNELS + channel] = (unsigned char)pixel_value;
+// 		}
+// 	}
+// }
+
+__global__ void GaussianBlurDeviceRow(const unsigned char *image,
+								   const float *mask,
+								   unsigned char *image_out,
+								   int N)
+{
+	int globalId_x = threadIdx.x + blockIdx.x * blockDim.x;
+	int globalId_y = threadIdx.y + blockIdx.y * blockDim.y;
+
+	if (globalId_x < WIDTH && globalId_y < HEIGHT)
+	{
+		for (int channel = 0; channel < CHANNELS; ++channel)
+		{
+			float pixel_value = 0;
+			for (int v = 0; v < N; v++)
+			{
+				int new_x = min(WIDTH, max(0, globalId_x - N/2));
+				int new_y = min(HEIGHT, max(0, globalId_y + v -N/2));
+				pixel_value += mask[v] * image[(new_y * WIDTH + new_x) * CHANNELS + channel];
+			}
+			image_out[(globalId_y * WIDTH + globalId_x) * CHANNELS + channel] = (unsigned char)pixel_value;
+		}
+	}
+}
+
+__global__ void GaussianBlurDeviceColumn(const unsigned char *image,
+								   const float *mask,
+								   unsigned char *image_out,
+								   int N)
+{
+	int globalId_x = threadIdx.x + blockIdx.x * blockDim.x;
+	int globalId_y = threadIdx.y + blockIdx.y * blockDim.y;
+
+	if (globalId_x < WIDTH && globalId_y < HEIGHT)
+	{
+		for (int channel = 0; channel < CHANNELS; ++channel)
+		{
+			float pixel_value = 0;
+			for (int v = 0; v < N; v++)
+			{
+				int new_x = min(WIDTH, max(0, globalId_x + v - N/2));
+				int new_y = min(HEIGHT, max(0, globalId_y - N/2));
+				pixel_value += mask[v] * image[(new_y * WIDTH + new_x) * CHANNELS + channel];
+			}
+			image_out[(globalId_y * WIDTH + globalId_x) * CHANNELS + channel] = (unsigned char)pixel_value;
+		}
+	}
+}
+
 
 void GaussianBlurHost(const unsigned char *image,
 					  const float *mask,
@@ -138,6 +220,10 @@ int main()
 	// Build a gaussian filter for the image
 	buildGaussianFilterMask(mask, N, sigma);
 
+	float mask_row []= { 1.0/10.0, 1.0/10.0, 1.0/10.0,
+						 1.0/10.0, 1.0/10.0, 1.0/10.0,
+						 1.0/10.0, 1.0/10.0, 1.0/10.0, 1.0/10.0 };
+
 	// -------------------------------------------------------------------------
 	// HOST EXECUTIION
 	TM_host.start();
@@ -147,25 +233,28 @@ int main()
 	TM_host.stop();
 	TM_host.print("GaussianBlur host:   ");
 
-	// cv::Mat A(HEIGHT, WIDTH, CV_8UC3, host_image_out);
-	// cv::imshow("Result of gaussian blur (host)", A);
-	// cv::waitKey(0);
+	cv::Mat A(HEIGHT, WIDTH, CV_8UC3, host_image_out);
+	cv::imshow("Result of gaussian blur (host)", A);
+	cv::waitKey(0);
 
 	// -------------------------------------------------------------------------
 	// DEVICE MEMORY ALLOCATION
 
-	unsigned char *dev_image, *dev_image_out;
-	float *dev_mask;
+	unsigned char *dev_image, *dev_image_out, *tmp;
+	float *dev_mask, *dev_mask_row;
 
 	SAFE_CALL(cudaMalloc(&dev_image, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char)));
 	SAFE_CALL(cudaMalloc(&dev_image_out, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char)));
+	SAFE_CALL(cudaMalloc(&tmp, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char)));
 	SAFE_CALL(cudaMalloc(&dev_mask, N * N * sizeof(float)));
+	SAFE_CALL(cudaMalloc(&dev_mask_row, N * sizeof(float)));
 
 	// -------------------------------------------------------------------------
 	// COPY DATA FROM HOST TO DEVICE
 
 	SAFE_CALL(cudaMemcpy(dev_image, image, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char), cudaMemcpyHostToDevice));
 	SAFE_CALL(cudaMemcpy(dev_mask, mask, N * N * sizeof(float), cudaMemcpyHostToDevice));
+	SAFE_CALL(cudaMemcpy(dev_mask_row, mask_row, N * sizeof(float), cudaMemcpyHostToDevice));
 
 	// -------------------------------------------------------------------------
 	// DEVICE EXECUTION
@@ -176,6 +265,8 @@ int main()
 	TM_device.start();
 
 	GaussianBlurDevice<<<block_size, num_blocks>>>(dev_image, dev_mask, dev_image_out, N);
+	// GaussianBlurDeviceRow<<<block_size, num_blocks>>>(dev_image, dev_mask_row, tmp, N);
+	// GaussianBlurDeviceColumn<<<block_size, num_blocks>>>(tmp, dev_mask_row, dev_image_out, N);
 
 	TM_device.stop();
 	CHECK_CUDA_ERROR
@@ -193,16 +284,15 @@ int main()
 	// -------------------------------------------------------------------------
 	// RESULT CHECK
 
-	// cv::Mat B(HEIGHT, WIDTH, CV_8UC3, device_image_out);
-	// cv::imshow("Result of gaussian blur (device)", B);
-	// cv::waitKey(0);
+	cv::Mat B(HEIGHT, WIDTH, CV_8UC3, device_image_out);
+	cv::imshow("Result of gaussian blur (device)", B);
+	cv::waitKey(0);
 
 	for (int i = 0; i < HEIGHT; i++)
 	{
 		for (int j = 0; j < WIDTH; j++)
 		{
-			if (device_image_out[i * WIDTH + j] != host_image_out[i * WIDTH + j] 
-					|| device_image_out[i * WIDTH + j] != host_image_out[i * WIDTH + j])
+			if (device_image_out[i * WIDTH + j] != host_image_out[i * WIDTH + j])
 			{
 				std::cerr << "wrong result at [" << i << "][" << j << "]!" << std::endl;
 				std::cerr << "image_out: " << (short)host_image_out[i * WIDTH + j] << std::endl;
