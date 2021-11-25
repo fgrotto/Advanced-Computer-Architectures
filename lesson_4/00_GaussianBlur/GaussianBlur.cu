@@ -133,9 +133,8 @@ __global__ void GaussianBlurDeviceRow(const float *image,
 			float pixel_value = 0;
 			for (int v = 0; v < N; v++)
 			{
-				int new_x = min(WIDTH, max(0, globalId_x - N/2));
 				int new_y = min(HEIGHT, max(0, globalId_y + v -N/2));
-				pixel_value += mask[v] * image[(new_y * WIDTH + new_x) * CHANNELS + channel];
+				pixel_value += mask[v] * image[(new_y * WIDTH + globalId_x) * CHANNELS + channel];
 			}
 			image_out[(globalId_y * WIDTH + globalId_x) * CHANNELS + channel] = (unsigned char)pixel_value;
 		}
@@ -145,7 +144,7 @@ __global__ void GaussianBlurDeviceRow(const float *image,
 
 __global__ void GaussianBlurDeviceColumn(const unsigned char *image,
 								   const float *mask,
-								   float*image_out,
+								   float* image_out,
 								   int N)
 {
 	int globalId_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -159,10 +158,9 @@ __global__ void GaussianBlurDeviceColumn(const unsigned char *image,
 			for (int v = 0; v < N; v++)
 			{
 				int new_x = min(WIDTH, max(0, globalId_x + v - N/2));
-				int new_y = min(HEIGHT, max(0, globalId_y - N/2));
-				pixel_value += mask[v] * image[(new_y * WIDTH + new_x) * CHANNELS + channel];
+				pixel_value += mask[v] * image[(globalId_y * WIDTH + new_x) * CHANNELS + channel];
 			}
-			image_out[(globalId_y * WIDTH + globalId_x) * CHANNELS + channel] = (unsigned char)pixel_value;
+			image_out[(globalId_y * WIDTH + globalId_x) * CHANNELS + channel] = pixel_value;
 		}
 		// image_out[(globalId_y * WIDTH + globalId_x) * CHANNELS + 3] = (unsigned char)255;
 	}
@@ -317,12 +315,14 @@ int main()
 	delete[] host_image_out;
 	delete[] device_image_out;
 	delete[] mask;
+	delete[] mask_row; 
 
 	// -------------------------------------------------------------------------
 	// DEVICE MEMORY DEALLOCATION
 	SAFE_CALL(cudaFree(dev_image))
 	SAFE_CALL(cudaFree(dev_image_out))
 	SAFE_CALL(cudaFree(dev_mask))
+	SAFE_CALL(cudaFree(tmp))
 
 	// -------------------------------------------------------------------------
 	//SAFE_CALL(cudaFree());
