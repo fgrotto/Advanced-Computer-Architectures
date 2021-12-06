@@ -13,7 +13,7 @@ const int N = 5;
 const int WIDTH  = 4000;
 const int HEIGHT = 2000;
 const int CHANNELS = 3;
-const int BLOCK_SIZE = 128;
+const int NUM_BLOCKS = 128;
 
 std::string getImageType(int type) {
   std::string r;
@@ -265,14 +265,14 @@ int main()
 	// -------------------------------------------------------------------------
 	// DEVICE EXECUTION
 
-	dim3 block_size(BLOCK_SIZE, BLOCK_SIZE, 1);
-	dim3 num_blocks(ceil(float(WIDTH) / BLOCK_SIZE), ceil(float(HEIGHT) / BLOCK_SIZE), 1);
+	dim3 num_block(NUM_BLOCKS, NUM_BLOCKS, 1);
+	dim3 block_size(ceil(float(WIDTH) / NUM_BLOCKS), ceil(float(HEIGHT) / NUM_BLOCKS), 1);
 
 	TM_device.start();
 
-	// GaussianBlurDevice<<<block_size, num_blocks>>>(dev_image, dev_mask, dev_image_out, N);
-	GaussianBlurDeviceColumn<<<block_size, num_blocks>>>(dev_image, dev_mask_row, tmp, N);
-	GaussianBlurDeviceRow<<<block_size, num_blocks>>>(tmp, dev_mask_row, dev_image_out, N);
+	// GaussianBlurDevice<<<num_block, block_size>>>(dev_image, dev_mask, dev_image_out, N);
+	GaussianBlurDeviceColumn<<<num_block, block_size>>>(dev_image, dev_mask_row, tmp, N);
+	GaussianBlurDeviceRow<<<num_block, block_size>>>(tmp, dev_mask_row, dev_image_out, N);
 
 	TM_device.stop();
 	CHECK_CUDA_ERROR
