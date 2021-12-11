@@ -69,7 +69,6 @@ void test_producer_consumer_critical(int Buffer[32]) {
 				}
 			}
 		}
-		#pragma omp critical(increment) // not necessary
 		i++;
 	}
 }
@@ -109,41 +108,6 @@ void test_producer_consumer_locks(int Buffer[32]) {
 		}
 	}
 }
-
-// Doesn't work because we need the critical region and we can guarantee the only using the atomic, you can use atomic on arrays
-// void test_producer_consumer_atomic(int Buffer[32]) {
-// 	int i = 0;
-// 	int count = 0;
-
-// 	#pragma omp parallel shared(i, Buffer, count)
-// 		while (i < 35000) {
-// 			// PRODUCER
-// 			if ((rand() % 50) == 0) {
-// 				if (count < 31) {
-// 					#pragma omp atomic
-// 					++count;
-// 					std::cout << "Thread:\t" << omp_get_thread_num()
-// 							<< "\tProduce on index: " << count << std::endl;
-// 					Buffer[count] = omp_get_thread_num();
-// 				}
-// 			}
-// 			// CONSUMER
-// 			if ((std::rand() % 51) == 0) {
-// 				if (count >= 1) {
-					
-// 					int var = Buffer[count];
-// 					std::cout << "Thread:\t" << omp_get_thread_num()
-// 							<< "\tConsume on index: " << count
-// 							<< "\tvalue: " << var << std::endl;
-// 					#pragma omp atomic
-// 					--count;
-// 				}
-// 			}
-// 			#pragma omp atomic
-// 			i++;
-// 		}
-// }
-
 
 int main() {
 	using namespace timer;
