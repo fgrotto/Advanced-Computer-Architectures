@@ -1,4 +1,4 @@
-set(PROJECT "RC4")
+set(PROJECT "ProducerConsumer")
 project(${PROJECT} CXX)
 
 cmake_minimum_required(VERSION 3.5)
@@ -19,11 +19,8 @@ endif()
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-# ------------------------------------------------------------------
+add_compile_options("-O0")
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
-#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}
-#                            ${OpenMP_EXE_LINKER_FLAGS}")
-
-add_compile_options("-O0")
-add_executable(rc4 ${PROJECT_SOURCE_DIR}/RC4.cpp)
+add_executable(producerconsumer ${PROJECT_SOURCE_DIR}/ProducerConsumer.cpp)

@@ -115,21 +115,24 @@ int main() {
 
     std::fill(key, key + key_length, 0);
 
-    #pragma omp parallel for //shared(flag)
-    for (int k = 0; k < (1<<24); ++k) {
+    int next, i, k;
+    #pragma omp parallel for shared(S, flag) private(k,i,stream) schedule(auto)
+    for (k = 0; k < (1<<24); ++k) {
         if (flag) {
-            key_scheduling_alg(S, key, key_length);
-            pseudo_random_gen(S, stream, key_length);
+            #pragma omp critical
+            {
+                key_scheduling_alg(S, key, key_length);
+                pseudo_random_gen(S, stream, key_length);
+            }
 
-            // #pragma omp parallel for
-            for (int i = 0; i < key_length; ++i)
+            for (i = 0; i < key_length; ++i)
                 stream[i] = stream[i] ^ Plaintext[i];        // XOR
 
             if (chech_hex(cipher_text, stream, key_length)) {
                 std::cout << " <> CORRECT\n\n";
                 flag = false;
             } else {
-                int next = 0;
+                next = 0;
                 while (key[next] == 255) {
                     key[next] = 0;
                     ++next;

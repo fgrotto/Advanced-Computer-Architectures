@@ -1,0 +1,104 @@
+Lesson5
+
+MatrixMul (ROWS=COLS=1024)
+
+cpu_time = 4684 ms
+par_time = 4174.5 ms
+speedup  = 1.12x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O3)
+
+cpu_time = 13852.6 ms
+par_time = 5509.3 ms
+speedup  = 2.5x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O0)
+
+
+Factorial (N = 268435456)
+
+cpu_time = 1256.3 ms
+par_time = 247.9 ms
+speedup  = 5.07x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O3)
+
+cpu_time = 2294.9 ms
+par_time = 473.4 ms
+speedup  = 4.85x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O0)
+
+Find (N = 67108864)
+
+(Not found element)
+cpu_time = 158.5 ms
+par_time = 90.9 ms
+speedup  = 1.7x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O3)
+
+(Found element, due to ordering of openMP to get the same result)
+cpu_time = 86.7 ms
+par_time = 111.9 ms
+speedup  = 0.77x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O3)
+
+
+RC4 (N = 256)
+
+cpu_time = 5575.6 ms
+par_time = 8908.2 ms
+speedup  = 0.6x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O3)
+
+cpu_time = 93362.1 ms
+par_time = 33076.0 ms
+speedup  = 2.8x
+device   = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	 = OpenMP(-O0)
+
+
+Lesson6
+
+Fibonacci (N = 47)
+
+cpu_time            = 77946.7 ms
+par_time (tasks)    = 82988.4 ms
+par_time (sections) = 53038.1 ms
+cpu_time (iterative)= 0 ms (??)
+device              = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	            = OpenMP(no options)
+
+cpu_time            = 31627.5 ms
+par_time (tasks)    = 27583.3 ms
+par_time (sections) = 20079.7 ms
+cpu_time (iterative)= 0 ms (??)
+speedup             = 1.6x
+device              = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode                = OpenMP(-O3)
+
+QuickSort (N = 1000000)
+
+cpu_time            = 24127.2 ms
+par_time (sections) = 19064.7 ms
+speedup             = 1.3x
+device              = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	            = OpenMP(-O3)
+
+ProducerConsumer (N = 35000)
+
+cpu_time            = 18.1305 ms
+par_time (critical) = 16.2235 ms
+par_time (locks)    = 25.0724 ms
+device              = Intel Core i5-8250U CPU @ 1.60GHz × 8
+mode 	            = OpenMP(-O0)
+
+- L'approccio con shared memory non può essere usato perchè non ci garantisce la gestione della concorrenza (serve una critical region o dei locks)
+- L'approccio con atomic non è sufficiente perchè devo coprire un'intera regione anche la parte legata all'uso del buffer (race conditions)
+- L'approccio con barriera non mi evita le race conditions.
+
+
+
